@@ -29,17 +29,27 @@ function setMap(){
     //use Promise.all to parallelize asynchronous data loading
     var promises = [];    
     promises.push(d3.csv("data/MilwaukeeCounty.csv")); //load attributes from csv    
-    promises.push(d3.json("data/MilwaukeeCounty.topojson")); //load background and choropleth spatial data    
+    promises.push(d3.json("data/WIcounties.topojson")); //load background spatial data
+    promises.push(d3.json("data/MilwaukeeCounty.topojson")); //load choropleth spatial data    
     Promise.all(promises).then(callback);
   
 
     function callback(data){    
-        csvData = data[0];    
-        milwaukee = data[1];    
+        csvData = data[0];
+        wisconsin = data[1];
+        milwaukee = data[2];    
         console.log(csvData);
+        console.log(wisconsin);
         console.log(milwaukee);
 
-        var milwaukeeTracts = topojson.feature(milwaukee, milwaukee.objects.milwaukeeTracts).features;
+        var WIcounties = topojson.feature(wisconsin, wisconsin.objects.WIcounties).features,
+            milwaukeeTracts = topojson.feature(milwaukee, milwaukee.objects.MilwaukeeCounty).features;
+
+        //add WI counties to map
+        var counties = map.append("path")
+            .datum(WIcounties)
+            .attr("class", "counties")
+            .attr("d", path);
 
         //add Milwaukee census tracts to map
         var tracts = map.selectAll(".tracts")

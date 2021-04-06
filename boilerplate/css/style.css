@@ -16,3 +16,9 @@
     font-size: 1.5em;
     font-weight: bold;
 }
+
+.counties {
+    fill: #FFF;
+    stroke: #CCC;
+    stroke-width: 2px;
+}
