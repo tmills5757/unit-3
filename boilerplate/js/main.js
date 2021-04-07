@@ -35,33 +35,76 @@ function setMap(){
   
 
     function callback(data){    
-        csvData = data[0];
-        wisconsin = data[1];
-        milwaukee = data[2];    
-        console.log(csvData);
-        console.log(wisconsin);
-        console.log(milwaukee);
+        var csvData = data[0], wisconsin = data[1], milwaukee = data[2];    
 
+        //translate WI and Milwaukee County TopoJSON
         var WIcounties = topojson.feature(wisconsin, wisconsin.objects.WIcounties).features,
-            milwaukeeTracts = topojson.feature(milwaukee, milwaukee.objects.MilwaukeeCounty).features;
+        milwaukeeTracts = topojson.feature(milwaukee, milwaukee.objects.MilwaukeeCounty).features;
+            
+        //place graticule on the map
+        setGraticule(map, path);
 
-        //add WI counties to map
-        var counties = map.append("path")
-            .datum(WIcounties)
-            .attr("class", "counties")
-            .attr("d", path);
+        //join csv data to GeoJSON enumeration units
+        var milwaukeeTracts = joinData(milwaukeeTracts, csvData);
 
-        //add Milwaukee census tracts to map
-        var tracts = map.selectAll(".tracts")
-            .data(milwaukeeTracts)
-            .enter()
-            .append("path")
-            .attr("class", function(d){
-                return "tracts " + d.properties.GEO_ID;
-            })
-            .attr("d", path);
+        //create the color scale
+        var colorScale = makeColorScale(csvData);
 
+        //add enumeration units to the map
+        setEnumerationUnits(milwaukeeTracts, map, path);
+    };
+}; //end of setMap()
+
+function setGraticule(map, path){
+    //...GRATICULE BLOCKS FROM Week 8
+};
+
+function joinData(milwaukeeTracts, csvData){
+    
+
+    //variables for data join
+    var attrArray = ["Pct_Pov", "Pct_HS25", "Pct_Bach25", "Med_Inc", "Pct_UE16"];
+
+    //loop through csv to assign each set of csv attribute values to geojson tract
+    for (var i=0; i<csvData.length; i++){
+        var csvTract = csvData[i]; //the current tract
+        var csvKey = csvTract.GEO_ID; //the CSV primary key
+
+        //loop through geojson regions to find correct region
+        for (var a=0; a<milwaukeeTracts.length; a++){
+
+            var geojsonProps = milwaukeeTracts[a].properties; //the current tract geojson properties
+            var geojsonKey = geojsonProps.GEO_ID; //the geojson primary key
+
+            //where primary keys match, transfer csv data to geojson properties object
+            if (geojsonKey == csvKey){
+
+                //assign all attributes and values
+                attrArray.forEach(function(attr){
+                    var val = parseFloat(csvTract[attr]); //get csv attribute value
+                    geojsonProps[attr] = val; //assign attribute and value to geojson properties
+                });
+            };
+        };
     };
 
-    
+    return milwaukeeTracts;
 };
+
+function setEnumerationUnits(milwaukeeTracts, map, path){
+    //add WI counties to map
+    var counties = map.append("path")
+    .datum(WIcounties)
+    .attr("class", "counties")
+    .attr("d", path);
+
+    //add Milwaukee census tracts to map
+    var tracts = map.selectAll(".tracts")
+        .data(milwaukeeTracts)
+        .enter()
+        .append("path")
+        .attr("class", function(d){
+            return "tracts " + d.properties.GEO_ID;
+        })
+        .attr("d", path);
+};   
