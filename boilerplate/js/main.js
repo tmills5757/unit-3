@@ -1,110 +1,172 @@
-//begin script when window loads
-window.onload = setMap();
+//wrap everything is immediately invoked anonymous function so nothing is in global scope
+(function (){
 
-//set up choropleth map
-function setMap(){
+    //pseudo-global variables
+    var attrArray = ["Pct_Pov", "Pct_HS25", "Pct_Bach25", "Med_Inc", "Pct_UE16"]; //list of attributes
+    var expressed = attrArray[0]; //initial attribute
+    
+    
+    //begin script when window loads
+    window.onload = setMap();
 
-     //map frame dimensions
-     var width = 960,
-     height = 460;
+    //set up choropleth map
+    function setMap(){
 
-    //create new svg container for the map
-    var map = d3.select("body")
-        .append("svg")
-        .attr("class", "map")
-        .attr("width", width)
-        .attr("height", height);
+        //map frame dimensions
+        var width = 960,
+        height = 460;
 
-    //create cylindrical equal area project centered on Milwaukee
-    var projection = d3.geoCylindricalEqualArea()
-        .parallel(0)
-        .translate([width / 2, height / 2])
-        .fitExtent([[0.5, 0.5], [width - 0.5, height - 0.5]], {type: "Sphere"})
-        .precision(0.1);
-        
+        //create new svg container for the map
+        var map = d3.select("body")
+            .append("svg")
+            .attr("class", "map")
+            .attr("width", width)
+            .attr("height", height);
 
-    var path = d3.geoPath()
-        .projection(projection);
+        var projection = d3.geoAlbers()
+        .center([0.00, 43])
+        .rotate([87.75, -0.00, 0])
+        .parallels([42.00, 44.19])
+        .scale(50000.00)
+        .translate([width / 2, height / 2]);
 
-    //use Promise.all to parallelize asynchronous data loading
-    var promises = [];    
-    promises.push(d3.csv("data/MilwaukeeCounty.csv")); //load attributes from csv    
-    promises.push(d3.json("data/WIcounties.topojson")); //load background spatial data
-    promises.push(d3.json("data/MilwaukeeCounty.topojson")); //load choropleth spatial data    
-    Promise.all(promises).then(callback);
-  
+        var path = d3.geoPath()
+            .projection(projection);    
 
-    function callback(data){    
-        var csvData = data[0], wisconsin = data[1], milwaukee = data[2];    
-
-        //translate WI and Milwaukee County TopoJSON
-        var WIcounties = topojson.feature(wisconsin, wisconsin.objects.WIcounties).features,
-        milwaukeeTracts = topojson.feature(milwaukee, milwaukee.objects.MilwaukeeCounty).features;
-            
-        //place graticule on the map
-        setGraticule(map, path);
-
-        //join csv data to GeoJSON enumeration units
-        var milwaukeeTracts = joinData(milwaukeeTracts, csvData);
-
-        //create the color scale
-        var colorScale = makeColorScale(csvData);
-
-        //add enumeration units to the map
-        setEnumerationUnits(milwaukeeTracts, map, path);
-    };
-}; //end of setMap()
-
-function setGraticule(map, path){
-    //...GRATICULE BLOCKS FROM Week 8
-};
-
-function joinData(milwaukeeTracts, csvData){
+        //use Promise.all to parallelize asynchronous data loading
+        var promises = [];    
+        promises.push(d3.csv("data/MilwaukeeCounty.csv")); //load attributes from csv    
+        promises.push(d3.json("data/WIcounties.topojson")); //load background spatial data
+        promises.push(d3.json("data/MilwaukeeCounty.topojson")); //load choropleth spatial data    
+        Promise.all(promises).then(callback);
     
 
-    //variables for data join
-    var attrArray = ["Pct_Pov", "Pct_HS25", "Pct_Bach25", "Med_Inc", "Pct_UE16"];
+        function callback(data){    
+            var csvData = data[0], wisconsin = data[1], milwaukee = data[2];    
+            
+            //place graticule on the map
+            setGraticule(map, path);
 
-    //loop through csv to assign each set of csv attribute values to geojson tract
-    for (var i=0; i<csvData.length; i++){
-        var csvTract = csvData[i]; //the current tract
-        var csvKey = csvTract.GEO_ID; //the CSV primary key
+            //translate WI and Milwaukee County TopoJSON
+            var WIcounties = topojson.feature(wisconsin, wisconsin.objects.WIcounties_proj),
+            milwaukeeTracts = topojson.feature(milwaukee, milwaukee.objects.MilwaukeeCounty_proj).features;
 
-        //loop through geojson regions to find correct region
-        for (var a=0; a<milwaukeeTracts.length; a++){
+            //add WI counties to map
+            var counties = map.append("path")
+            .datum(WIcounties)
+            .attr("class", "counties")
+            .attr("d", path);
 
-            var geojsonProps = milwaukeeTracts[a].properties; //the current tract geojson properties
-            var geojsonKey = geojsonProps.GEO_ID; //the geojson primary key
+            //join csv data to GeoJSON enumeration units
+            milwaukeeTracts = joinData(milwaukeeTracts, csvData);
+            //console.log(milwaukeeTracts);
 
-            //where primary keys match, transfer csv data to geojson properties object
-            if (geojsonKey == csvKey){
+            //create the color scale
+            var colorScale = makeColorScale(csvData);
 
-                //assign all attributes and values
-                attrArray.forEach(function(attr){
-                    var val = parseFloat(csvTract[attr]); //get csv attribute value
-                    geojsonProps[attr] = val; //assign attribute and value to geojson properties
-                });
-            };
+            setEnumerationUnits(milwaukeeTracts, map, path, colorScale);
         };
+    }; //end of setMap()
+
+    function setGraticule(map, path){
+        var graticule = d3.geoGraticule().step([5, 5]); //place graticule lines every 5 degrees of longitude and latitude
+
+        //create graticule background
+        var gratBackground = map
+        .append("path")
+        .datum(graticule.outline()) //bind graticule background
+        .attr("class", "gratBackground") //assign class for styling
+        .attr("d", path); //project graticule
+
+        //create graticule lines
+        var gratLines = map
+            .selectAll(".gratLines") //select graticule elements that will be created
+            .data(graticule.lines()) //bind graticule lines to each element to be created
+            .enter() //create an element for each datum
+            .append("path") //append each element to the svg as a path element
+            .attr("class", "gratLines") //assign class for styling
+            .attr("d", path); //project graticule lines
     };
 
-    return milwaukeeTracts;
-};
+    function joinData(milwaukeeTracts, csvData){
 
-function setEnumerationUnits(milwaukeeTracts, map, path){
-    //add WI counties to map
-    var counties = map.append("path")
-    .datum(WIcounties)
-    .attr("class", "counties")
-    .attr("d", path);
+        //loop through csv to assign each set of csv attribute values to geojson tract
+        for (var i=0; i<csvData.length; i++){
+            var csvTract = csvData[i]; //the current tract
+            var csvKey = csvTract.GEOID; //the CSV primary key
+            
 
-    //add Milwaukee census tracts to map
-    var tracts = map.selectAll(".tracts")
-        .data(milwaukeeTracts)
-        .enter()
-        .append("path")
-        .attr("class", function(d){
-            return "tracts " + d.properties.GEO_ID;
-        })
-        .attr("d", path);
-};   
+            //loop through geojson tracts to find correct tract
+            for (var a=0; a<milwaukeeTracts.length; a++){
+
+                var geojsonProps = milwaukeeTracts[a].properties; //the current tract geojson properties
+                var geojsonKey = geojsonProps.GEOID; //the geojson primary key
+
+                //where primary keys match, transfer csv data to geojson properties object
+                if (geojsonKey == csvKey){
+
+                    //assign all attributes and values
+                    attrArray.forEach(function(attr){
+                        var val = parseFloat(csvTract[attr]); //get csv attribute value
+                        geojsonProps[attr] = val; //assign attribute and value to geojson properties
+                    });
+                };
+            };
+        };
+
+        return milwaukeeTracts;
+    };
+
+    function setEnumerationUnits(milwaukeeTracts, map, path, colorScale){
+        //add Milwaukee census tracts to map
+        var regions = map.selectAll(".tracts")        
+            .data(milwaukeeTracts)        
+            .enter()        
+            .append("path")        
+            .attr("class", function(d){            
+                return "tracts " + d.properties.GEOID;        
+            })        
+            .attr("d", path)        
+                .style("fill", function(d){            
+                    var value = d.properties[expressed];            
+                    if(value) {                
+                        return colorScale(d.properties[expressed]);            
+                    } else {                
+                        return "#ccc";            
+                    }    
+        });
+
+    };   
+
+    //function to create color scale generator
+    function makeColorScale(data){
+        var colorClasses = [
+            "#D4B9DA",
+            "#C994C7",
+            "#DF65B0",
+            "#DD1C77",
+            "#980043"
+        ];
+
+        //create color scale generator
+        var colorScale = d3.scaleQuantile()
+            .range(colorClasses);
+
+        //build array of all values of the expressed attribute
+        var domainArray = [];
+        for (var i=0; i<data.length; i++){
+            var val = parseFloat(data[i][expressed]);
+            //console.log(val);
+            domainArray.push(val);
+        };
+
+        //assign array of expressed values as scale domain
+        colorScale.domain(domainArray);
+
+        return colorScale;
+    };
+
+
+})();
+
+

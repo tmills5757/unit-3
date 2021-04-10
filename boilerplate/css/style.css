@@ -22,3 +22,22 @@
     stroke: #CCC;
     stroke-width: 2px;
 }
+
+.tracts {
+    stroke: #000;
+    stroke-width: 0.5px;
+    stroke-linecap: round;
+}
+
+.gratLines {
+    fill: none;
+    stroke: #999;
+    stroke-width: 1px;
+}
+.gratBackground {
+    fill: #D5E3FF;
+}
+
+.map {
+    border: medium solid #999;
+}
